@@ -1,0 +1,988 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Energy Recovery Simulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-main: #ffffff;
+            --panel: #f1f5f9;
+            --panel-soft: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+
+            --sidebar-bg: #0f172a;
+            --sidebar-panel: #1e293b;
+            --sidebar-text: #ffffff;
+
+            --line: #e2e8f0;
+            --text: var(--text-main);
+            --muted: var(--text-muted);
+            --cyan: #34d399;
+            --blue: #22d3ee;
+            --green: #10b981;
+            --amber: #fbbf24;
+            --red: #fb7185;
+            --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+            --glow: 0 0 22px rgba(34, 211, 238, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            height: 100%;
+            width: 100%;
+            overflow-x: hidden;
+            font-size: 17px;
+        }
+
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            background: var(--bg-main);
+            overflow: hidden;
+            overscroll-behavior: none;
+            touch-action: pan-x pan-y;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02));
+            opacity: 0.04;
+        }
+
+        .app-shell {
+            min-height: 100vh;
+            height: 100vh;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+        }
+
+        .glass {
+            background: var(--panel);
+            border: 1px solid #e2e8f0;
+            box-shadow: var(--shadow);
+        }
+
+        .sidebar {
+            background: var(--sidebar-bg);
+            border-radius: 0;
+            padding: 16px;
+            width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            height: 100vh;
+            min-height: 100vh;
+            position: sticky;
+            top: 0;
+            left: 0;
+        }
+
+        .brand { display: flex; align-items: center; gap: 14px; }
+
+        .brand-mark {
+            width: 50px;
+            height: 50px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, rgba(67, 231, 255, 0.95), rgba(91, 140, 255, 0.95));
+            color: #03111c;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            box-shadow: var(--glow);
+        }
+
+        .brand-title { margin: 0; font-size: 1.38rem; font-weight: 700; }
+        .brand-subtitle, .muted { margin: 0; color: var(--muted); font-size: 1.12rem; }
+        .nav-group { display: grid; gap: 12px; }
+
+        .sidebar .brand-title,
+        .sidebar .brand-subtitle,
+        .sidebar .footer-note,
+        .sidebar .muted,
+        .sidebar .nav-item {
+            color: var(--sidebar-text);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 13px 15px;
+            border-radius: 16px;
+            color: var(--sidebar-text);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+            font-size: 1.16rem;
+            font-weight: 600;
+        }
+
+        .nav-item.active, .nav-item:hover {
+            color: var(--sidebar-text);
+            border-color: rgba(16, 185, 129, 0.25);
+            background: rgba(52, 211, 153, 0.14);
+        }
+
+        .nav-icon {
+            width: 18px;
+            height: 18px;
+            flex: 0 0 18px;
+        }
+
+        .nav-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, var(--green), var(--blue));
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+        }
+
+        .side-card {
+            padding: 18px;
+            border-radius: 22px;
+            background: var(--sidebar-panel);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        .main-column {
+            height: 100vh;
+            overflow-y: auto;
+            padding: 12px;
+            display: grid;
+            gap: 16px;
+            grid-template-rows: auto auto 1fr;
+            align-content: start;
+            min-height: 0;
+        }
+
+        .topbar {
+            border-radius: 28px;
+            padding: 22px;
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            align-items: center;
+        }
+
+        .hero-title, .hero-subtitle { margin: 0; }
+        .hero-title { font-size: clamp(2.7rem, 3.7vw, 3.5rem); line-height: 1.08; margin-bottom: 10px; font-weight: 800; }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.26);
+            color: #d8fff0;
+            white-space: nowrap;
+            font-size: 1.14rem;
+        }
+
+        .status-pill::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--green);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+        }
+
+        .control-panel {
+            border-radius: 28px;
+            padding: 18px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .control-header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+        .control-header h2, .control-header p { margin: 0; }
+        .control-header h2 { font-size: 1.8rem; font-weight: 800; }
+        .control-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+        .field { display: grid; gap: 9px; }
+        .field label { font-size: 1.16rem; color: var(--muted); font-weight: 600; }
+
+        .field input {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            background: #ffffff;
+            color: var(--text);
+            outline: none;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+            font-size: 1.16rem;
+        }
+
+        .field input:focus {
+            border-color: rgba(67, 231, 255, 0.36);
+            box-shadow: 0 0 0 4px rgba(67, 231, 255, 0.08);
+        }
+
+        .run-button {
+            width: 100%;
+            height: 52px;
+            border: 0;
+            border-radius: 16px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #03211a;
+            background: linear-gradient(135deg, var(--green), var(--blue));
+            box-shadow: 0 10px 24px rgba(16, 185, 129, 0.22);
+            cursor: pointer;
+            transition: box-shadow 160ms ease, opacity 160ms ease;
+            align-self: end;
+        }
+
+        .run-button:hover { box-shadow: 0 14px 28px rgba(16, 185, 129, 0.28); }
+        .run-button:disabled { opacity: 0.72; cursor: wait; }
+        .view-stack { display: grid; gap: 14px; min-height: 0; height: 100%; }
+        .view-panel {
+            display: none;
+            opacity: 0;
+            transition: opacity 220ms ease;
+            min-height: 0;
+        }
+
+        .view-panel.active {
+            display: grid;
+            opacity: 1;
+            min-height: 0;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .focus-grid {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 14px;
+            align-items: stretch;
+            height: 100%;
+        }
+
+        .analytics-grid {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+            gap: 14px;
+        }
+
+        .battery-grid {
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1fr);
+            gap: 14px;
+        }
+
+        .panel-card {
+            border-radius: 24px;
+            padding: 18px;
+            min-height: auto;
+            height: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .panel-card.power-panel {
+            height: 100%;
+            min-height: 0;
+        }
+
+        .panel-title, .panel-subtitle { margin: 0; }
+        .panel-title { font-size: 1.65rem; font-weight: 800; }
+        .panel-header { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+        .chart-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+        .mini-card {
+            padding: 12px;
+            border-radius: 20px;
+            background: var(--panel-soft);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .mini-label { margin: 0 0 10px; font-size: 1.14rem; color: var(--muted); font-weight: 600; }
+
+        .chart-wrap {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+            border-radius: 18px;
+            background: #ffffff;
+        }
+
+        .chart-wrap.hero { height: 300px; min-height: 300px; max-height: 300px; }
+        .chart-wrap.medium { height: 300px; min-height: 300px; max-height: 300px; }
+        .chart-wrap.small { height: 185px; min-height: 185px; max-height: 185px; }
+        .chart-wrap.hero.fill {
+            height: auto;
+            min-height: 300px;
+            max-height: none;
+            flex: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .stats-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .stats-grid.compact {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .stat-card {
+            padding: 16px;
+            border-radius: 20px;
+            background: var(--panel);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .stat-card:hover {
+            border-color: rgba(16, 185, 129, 0.24);
+            box-shadow: var(--glow);
+        }
+
+        .stat-label { margin: 0 0 8px; color: var(--muted); font-size: 1.16rem; font-weight: 600; }
+        .stat-value { margin: 0 0 8px; font-size: 3.1rem; font-weight: 800; line-height: 1; }
+        .stat-foot { margin: 0; font-size: 1.1rem; color: #c6d5eb; }
+
+        .list-card {
+            padding: 18px;
+            border-radius: 24px;
+            display: grid;
+            gap: 14px;
+            height: auto;
+        }
+
+        .detail-row { display: grid; gap: 8px; }
+        .row-top { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+        .row-top span, .row-top strong { font-size: 1.16rem; }
+        .detail-list { display: grid; gap: 12px; }
+
+        .detail-item {
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: var(--panel);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .bar-track {
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, var(--green), var(--blue));
+            box-shadow: 0 0 14px rgba(16, 185, 129, 0.22);
+        }
+
+        .footer-note { color: var(--muted); font-size: 1rem; line-height: 1.6; }
+
+        @media (max-width: 1260px) {
+            .focus-grid,
+            .analytics-grid,
+            .battery-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 980px) {
+            .app-shell { grid-template-columns: 1fr; width: 100%; margin: 0; }
+            .sidebar { position: static; min-height: auto; height: auto; width: 100%; border-radius: 0; }
+            .main-column { height: auto; overflow-y: visible; padding: 8px; }
+            .control-grid, .chart-grid, .stats-grid.compact, .kpi-grid { grid-template-columns: 1fr; }
+            .topbar, .control-header { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar glass">
+            <div class="brand">
+                <div class="brand-mark">ER</div>
+                <div>
+                    <p class="brand-title">Energy Recovery Simulator</p>
+                    <p class="brand-subtitle">Power analytics dashboard</p>
+                </div>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-item active" data-view="live"><i class="nav-icon" data-lucide="bar-chart-3"></i><span>Live Dashboard</span></div>
+                <div class="nav-item" data-view="analytics"><i class="nav-icon" data-lucide="chart-line"></i><span>Recovery Analytics</span></div>
+                <div class="nav-item" data-view="battery"><i class="nav-icon" data-lucide="battery"></i><span>Battery Health</span></div>
+                <div class="nav-item" data-view="stages"><i class="nav-icon" data-lucide="settings-2"></i><span>Efficiency Stages</span></div>
+            </div>
+
+            <div class="side-card">
+                <p class="brand-title" style="margin-bottom: 8px;">Physics Model</p>
+                <p class="muted">Back EMF, shaft torque, generator voltage, charge acceptance, and staged efficiency losses are all reflected in the live simulation output.</p>
+            </div>
+
+            <div class="footer-note">
+                Fixed-height chart containers and responsive glass panels keep the interface stable while Chart.js updates in place.
+            </div>
+        </aside>
+
+        <main class="main-column">
+            <section class="topbar glass">
+                <div>
+                    <h1 class="hero-title">Energy Recovery Simulator</h1>
+                    <p class="hero-subtitle muted">Professional dashboard for regenerative charging performance, output power, system losses, and battery acceptance behavior.</p>
+                </div>
+                <div class="status-pill" id="statusPill">System status: waiting</div>
+            </section>
+
+            <section class="control-panel glass">
+                <div class="control-header">
+                    <div>
+                        <h2>Simulation Controls</h2>
+                        <p class="muted">Adjust live electrical inputs and trigger a full backend recomputation.</p>
+                    </div>
+                </div>
+
+                <div class="control-grid">
+                    <div class="field">
+                        <label for="voltage">Battery Voltage (V)</label>
+                        <input id="voltage" type="number" step="0.1" placeholder="Enter battery voltage" />
+                    </div>
+                    <div class="field">
+                        <label for="motorVoltage">Motor Voltage (V)</label>
+                        <input id="motorVoltage" type="number" step="0.1" placeholder="Enter motor voltage" />
+                    </div>
+                    <div class="field">
+                        <label for="rpm">RPM</label>
+                        <input id="rpm" type="number" step="1" placeholder="Enter RPM" />
+                    </div>
+                    <div class="field">
+                        <label>&nbsp;</label>
+                        <button class="run-button" id="runButton">Run Simulation</button>
+                    </div>
+                </div>
+            </section>
+            <section class="view-stack">
+                <section class="view-panel active" id="view-live">
+                    <div class="focus-grid">
+                        <div class="kpi-grid">
+                            <div class="stat-card glass">
+                                <p class="stat-label">Recovered Power</p>
+                                <p class="stat-value" id="powerValue">0 W</p>
+                                <p class="stat-foot">Battery-side output power</p>
+                            </div>
+                            <div class="stat-card glass">
+                                <p class="stat-label">Overall Efficiency</p>
+                                <p class="stat-value" id="efficiencyValue">0 %</p>
+                                <p class="stat-foot">Electrical input to recovery</p>
+                            </div>
+                            <div class="stat-card glass">
+                                <p class="stat-label">Battery SOC</p>
+                                <p class="stat-value" id="socValue">0 %</p>
+                                <p class="stat-foot">Estimated state of charge</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-card glass power-panel">
+                            <div class="panel-header">
+                                <div>
+                                    <h3 class="panel-title">Power vs Time</h3>
+                                    <p class="panel-subtitle muted">Recovered power trajectory from the latest simulation run.</p>
+                                </div>
+                            </div>
+                            <div class="chart-wrap hero fill">
+                                <canvas id="powerChart"></canvas>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <section class="view-panel" id="view-analytics">
+                    <div class="analytics-grid">
+                        <div class="panel-card glass">
+                            <div class="panel-header">
+                                <div>
+                                    <h3 class="panel-title">Recovery Analytics</h3>
+                                    <p class="panel-subtitle muted">Detailed supporting charts for voltage, RPM, SOC trend, and power losses.</p>
+                                </div>
+                            </div>
+                            <div class="chart-grid">
+                                <div class="mini-card">
+                                    <p class="mini-label">Voltage Profile</p>
+                                    <div class="chart-wrap small">
+                                        <canvas id="voltageMini"></canvas>
+                                    </div>
+                                </div>
+                                <div class="mini-card">
+                                    <p class="mini-label">RPM Ramp</p>
+                                    <div class="chart-wrap small">
+                                        <canvas id="rpmMini"></canvas>
+                                    </div>
+                                </div>
+                                <div class="mini-card">
+                                    <p class="mini-label">SOC Projection</p>
+                                    <div class="chart-wrap small">
+                                        <canvas id="socMini"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="chart-wrap medium">
+                                <canvas id="lossChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="list-card glass">
+                            <div>
+                                <h3 class="panel-title">Analytics Snapshot</h3>
+                                <p class="panel-subtitle muted">Key live simulation values for quick interpretation.</p>
+                            </div>
+                            <div class="detail-list">
+                                <div class="detail-item"><div class="row-top"><span>Recovered power</span><strong id="powerValue">0 W</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Input electrical power</span><strong id="inputPowerValue">0 W</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Mechanical shaft power</span><strong id="mechPowerValue">0 W</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Operating state</span><strong id="statusValue">Idle</strong></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="view-panel" id="view-battery">
+                    <div class="battery-grid">
+                        <div class="panel-card glass">
+                            <div class="panel-header">
+                                <div>
+                                    <h3 class="panel-title">Battery Health</h3>
+                                    <p class="panel-subtitle muted">Battery charge state, charge current, and charging readiness.</p>
+                                </div>
+                            </div>
+                            <div class="chart-wrap medium">
+                                <canvas id="batteryChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="list-card glass">
+                            <div>
+                                <h3 class="panel-title">Battery Stats</h3>
+                                <p class="panel-subtitle muted">Battery-side outputs from the backend motor model.</p>
+                            </div>
+                            <div class="stats-grid compact">
+                                <div class="stat-card">
+                                    <p class="stat-label">Battery SOC</p>
+                                    <p class="stat-value" id="socValue">0 %</p>
+                                    <p class="stat-foot">Estimated state of charge</p>
+                                </div>
+                                <div class="stat-card">
+                                    <p class="stat-label">Charging Time</p>
+                                    <p class="stat-value" id="chargeTimeValue">0 h</p>
+                                    <p class="stat-foot">Projected time to full charge</p>
+                                </div>
+                            </div>
+                            <div class="detail-list">
+                                <div class="detail-item"><div class="row-top"><span>Charge current</span><strong id="chargeCurrentValue">0 A</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Charging time</span><strong id="chargeTimeValue">0 h</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Back EMF</span><strong id="backEmfValue">0 V</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Generator voltage</span><strong id="generatorValue">0 V</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Torque</span><strong id="torqueValue">0 Nm</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Input power</span><strong id="inputPowerValue">0 W</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Mechanical power</span><strong id="mechPowerValue">0 W</strong></div></div>
+                                <div class="detail-item"><div class="row-top"><span>Operating state</span><strong id="statusValue">Idle</strong></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="view-panel" id="view-stages">
+                    <div class="list-card glass">
+                        <div>
+                            <h3 class="panel-title">Efficiency Stages</h3>
+                            <p class="panel-subtitle muted">Energy retention across inverter, motor, drivetrain, generator, and rectifier.</p>
+                        </div>
+                        <div class="stats-grid compact">
+                            <div class="stat-card">
+                                <p class="stat-label">Total Stage Efficiency</p>
+                                <p class="stat-value" id="stageTotalValue">0 %</p>
+                                <p class="stat-foot">Combined stage transfer efficiency</p>
+                            </div>
+                        </div>
+                        <div id="stageList" class="detail-list"></div>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const chartRegistry = {};
+
+        function baseChartOptions() {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                resizeDelay: 0,
+                animation: {
+                    duration: 260,
+                    easing: "easeOutQuart"
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: "#0f172a",
+                            boxWidth: 12,
+                            usePointStyle: true,
+                            pointStyle: "circle",
+                            font: {
+                                size: 14,
+                                weight: "600"
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: "#0f172a",
+                            font: {
+                                size: 14,
+                                weight: "600"
+                            },
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 8
+                        },
+                        grid: { color: "#e2e8f0" },
+                        border: { color: "#cbd5e1" }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: "#0f172a",
+                            font: {
+                                size: 14,
+                                weight: "600"
+                            }
+                        },
+                        grid: { color: "#e2e8f0" },
+                        border: { color: "#cbd5e1" }
+                    }
+                }
+            };
+        }
+
+        function compactChartOptions() {
+            return {
+                ...baseChartOptions(),
+                plugins: {
+                    legend: { display: false }
+                }
+            };
+        }
+        function mountChart(key, canvasId, config) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) {
+                console.error(`Canvas not found: ${canvasId}`);
+                return;
+            }
+
+            if (chartRegistry[key]) {
+                chartRegistry[key].destroy();
+            }
+
+            chartRegistry[key] = new Chart(canvas.getContext("2d"), config);
+            console.log(`Chart mounted: ${key}`, config.data);
+        }
+
+        function format(value, unit, digits = 2) {
+            return `${Number(value ?? 0).toFixed(digits)} ${unit}`;
+        }
+
+        function setText(id, value) {
+            document.querySelectorAll(`[id="${id}"]`).forEach((element) => {
+                element.textContent = value;
+            });
+        }
+
+        function validateSimulationResponse(data) {
+            const required = ["metrics", "stages", "losses", "mini_charts", "timeseries"];
+            const missing = required.filter((key) => !(key in data));
+            if (missing.length) {
+                throw new Error(`Missing response fields: ${missing.join(", ")}`);
+            }
+            console.log("Validated simulation response", data);
+        }
+
+        function setActiveView(viewName) {
+            console.log("Switching dashboard view", viewName);
+
+            document.querySelectorAll(".nav-item").forEach((item) => {
+                item.classList.toggle("active", item.dataset.view === viewName);
+            });
+
+            document.querySelectorAll(".view-panel").forEach((panel) => {
+                panel.classList.toggle("active", panel.id === `view-${viewName}`);
+            });
+        }
+
+        function renderStages(stages) {
+            const stageList = document.getElementById("stageList");
+            const entries = [
+                ["Inverter", stages.inverter],
+                ["Motor", stages.motor],
+                ["Drivetrain", stages.drivetrain],
+                ["Generator", stages.generator],
+                ["Rectifier", stages.rectifier]
+            ];
+
+            stageList.innerHTML = entries.map(([label, value]) => `
+                <div class="detail-row">
+                    <div class="row-top">
+                        <span>${label}</span>
+                        <strong>${Number(value).toFixed(2)}%</strong>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width:${Number(value)}%"></div>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        function renderDashboard(data) {
+            validateSimulationResponse(data);
+
+            const { metrics, stages, losses, mini_charts, timeseries } = data;
+
+            console.log("Rendering dashboard with payload", {
+                metrics,
+                stages,
+                losses,
+                mini_charts,
+                timeseries
+            });
+
+            setText("powerValue", format(metrics.output_power, "W"));
+            setText("efficiencyValue", format(metrics.efficiency, "%"));
+            setText("socValue", format(metrics.soc, "%"));
+            setText("chargeTimeValue", format(metrics.charging_time_hours, "h"));
+            setText("chargeCurrentValue", format(metrics.charge_current, "A"));
+            setText("backEmfValue", format(metrics.back_emf, "V"));
+            setText("generatorValue", format(metrics.generator_voltage, "V"));
+            setText("torqueValue", format(metrics.torque, "Nm", 3));
+            setText("inputPowerValue", format(metrics.input_power, "W"));
+            setText("mechPowerValue", format(metrics.mechanical_power, "W"));
+            setText("stageTotalValue", format(stages.total, "%"));
+            setText("statusValue", metrics.status);
+            setText("statusPill", `System status: ${metrics.status}`);
+
+            renderStages(stages);
+
+            mountChart("power", "powerChart", {
+                type: "line",
+                data: {
+                    labels: timeseries.time_seconds || [],
+                    datasets: [{
+                        label: "Recovered Power",
+                        data: timeseries.power_watts || [],
+                        borderColor: "#22d3ee",
+                        backgroundColor: "rgba(34, 211, 238, 0.16)",
+                        fill: true,
+                        borderWidth: 3,
+                        tension: 0.36,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    ...baseChartOptions(),
+                    plugins: {
+                        ...baseChartOptions().plugins,
+                        title: {
+                            display: true,
+                            text: "Recovered Power (W)",
+                            color: "#0f172a",
+                            font: {
+                                size: 15,
+                                weight: "700"
+                            },
+                            padding: {
+                                bottom: 10
+                            }
+                        }
+                    }
+                }
+            });
+
+            mountChart("battery", "batteryChart", {
+                type: "doughnut",
+                data: {
+                    labels: ["SOC", "Remaining"],
+                    datasets: [{
+                        data: [Number(metrics.soc || 0), Math.max(100 - Number(metrics.soc || 0), 0)],
+                        backgroundColor: ["#10b981", "rgba(255,255,255,0.08)"],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 260,
+                        easing: "easeOutQuart"
+                    },
+                    cutout: "72%",
+                    plugins: {
+                        legend: {
+                            position: "bottom",
+                            labels: {
+                                color: "#0f172a",
+                                usePointStyle: true,
+                                pointStyle: "circle"
+                            }
+                        }
+                    }
+                }
+            });
+
+            mountChart("loss", "lossChart", {
+                type: "bar",
+                data: {
+                    labels: ["Thermal", "Mechanical", "Conversion"],
+                    datasets: [{
+                        label: "Losses (W)",
+                        data: [losses.thermal || 0, losses.mechanical || 0, losses.conversion || 0],
+                        backgroundColor: ["#fb7185", "#fbbf24", "#22d3ee"],
+                        borderRadius: 12
+                    }]
+                },
+                options: baseChartOptions()
+            });
+
+            mountChart("voltageMini", "voltageMini", {
+                type: "line",
+                data: {
+                    labels: ["1", "2", "3", "4", "5", "6", "7"],
+                    datasets: [{
+                        data: mini_charts.voltage_profile || [],
+                        borderColor: "#22d3ee",
+                        backgroundColor: "rgba(34, 211, 238, 0.12)",
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 0
+                    }]
+                },
+                options: compactChartOptions()
+            });
+            mountChart("rpmMini", "rpmMini", {
+                type: "bar",
+                data: {
+                    labels: ["1", "2", "3", "4", "5", "6", "7"],
+                    datasets: [{
+                        data: mini_charts.rpm_profile || [],
+                        backgroundColor: "rgba(16, 185, 129, 0.72)",
+                        borderRadius: 8
+                    }]
+                },
+                options: compactChartOptions()
+            });
+
+            mountChart("socMini", "socMini", {
+                type: "line",
+                data: {
+                    labels: (timeseries.soc_projection || []).map((_, index) => index + 1),
+                    datasets: [{
+                        data: timeseries.soc_projection || [],
+                        borderColor: "#10b981",
+                        backgroundColor: "rgba(16, 185, 129, 0.12)",
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 0
+                    }]
+                },
+                options: compactChartOptions()
+            });
+        }
+
+        async function runSimulation() {
+            const runButton = document.getElementById("runButton");
+            const payload = {
+                voltage: Number(document.getElementById("voltage").value),
+                motor_voltage: Number(document.getElementById("motorVoltage").value),
+                rpm: Number(document.getElementById("rpm").value)
+            };
+
+            console.log("Calling /api/simulate with payload", payload);
+
+            runButton.disabled = true;
+            runButton.textContent = "Running...";
+
+            try {
+                const response = await fetch("/api/simulate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                console.log("Simulation response status", response.status);
+
+                if (!response.ok) {
+                    const details = await response.text();
+                    console.error("Simulation failed", details);
+                    alert(`Simulation failed: ${details}`);
+                    return;
+                }
+
+                const result = await response.json();
+                console.log("Simulation response body", result);
+                renderDashboard(result);
+            } catch (error) {
+                console.error("Frontend simulation error", error);
+                alert(`Frontend error: ${error.message}`);
+            } finally {
+                runButton.disabled = false;
+                runButton.textContent = "Run Simulation";
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            console.log("Energy dashboard initialized");
+            lucide.createIcons();
+            document.querySelectorAll(".nav-item[data-view]").forEach((item) => {
+                item.addEventListener("click", () => setActiveView(item.dataset.view));
+            });
+
+            document.getElementById("runButton").addEventListener("click", runSimulation);
+            setActiveView("live");
+            runSimulation();
+        });
+    </script>
+</body>
+</html>
